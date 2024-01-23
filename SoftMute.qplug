@@ -1,0 +1,426 @@
+PluginInfo = {
+  Name = "Soft Mute",
+  Author = "Eugene Dunn",
+  BuildVersion = "1.0.0.0",
+  Version = "1.0",
+  Id = "f7e0d6a0-e1a3-4842-a49a-de7edab0e1ad",
+  Description = "A Mute Componet that ramps instad of hard muting",
+}
+local Colors = {
+  White = {255, 255, 255},
+  Black = {0, 0, 0},
+  Red = {255, 0, 0},
+  Green = {0, 255, 0},
+  Blue = {0, 0, 255},
+  Gray = {136, 136, 136},
+  LightGray = {51,51,51},
+  PluginColor = {191,226,249}
+}
+
+-- Define the color of the plugin object in the design
+function GetColor(props)
+  return Colors.PluginColor
+end
+
+-- The name that will initially display when dragged into a design
+function GetPrettyName(props)
+  return PluginInfo.Name
+  -- return "Vaddio" .. props["Model"].Value .. " " .. PluginInfo.Version
+end
+
+-- Optional function used if plugin has multiple pages
+PageNames = {"Main"} --List the pages within the plugin
+function GetPages(props)
+  local pages = {}
+  for ix,name in ipairs(PageNames) do
+    table.insert(pages, {name = PageNames[ix]})
+  end
+  return pages
+end
+
+-- Define User configurable Properties of the plugin
+function GetProperties()
+  local props = {}
+  table.insert(
+    props,
+    {
+      Name = "Type",
+      Type = "enum",
+      Value = "Mono",
+      Choices = {"Mono", "Stereo", "Multi-channel"}
+    }
+  )
+  table.insert(
+    props,
+    {
+      Name = "Count",
+      Type = "integer",
+      Value = 8,
+      min = 2,
+      Max = 64
+    }
+  )
+  return props
+end
+
+-- Optional function to define pins on the plugin that are not connected to a Control
+function GetPins(props)
+  local pins = {}
+  if props["Type"].Value == "Mono" then
+    table.insert(
+      pins,
+      {
+        Name = "Input",
+        Direction = "input"
+      }
+    )
+    table.insert(
+      pins,
+      {
+        Name = "Output",
+        Direction = "output"
+      }
+    )
+  elseif props["Type"].Value == "Stereo" then 
+    table.insert(
+      pins,
+      {
+        Name = "Input Left",
+        Direction = "input"
+      }
+    )
+    table.insert(
+      pins,
+      {
+        Name = "Input Right",
+        Direction = "input"
+      }
+    )
+    table.insert(
+      pins,
+      {
+        Name = "Output Left",
+        Direction = "output"
+      }
+    )
+    table.insert(
+      pins,
+      {
+        Name = "Output Right",
+        Direction = "output"
+      }
+    )
+  elseif props["Type"].Value == "Multi-channel" then
+    for x = 1, props["Count"].Value do
+      table.insert(
+        pins,
+        {
+          Name = "Input Channel " .. x,
+          Direction = "input"
+        }
+      )
+      table.insert(
+        pins,
+        {
+          Name = "Output Channel " .. x,
+          Direction = "output"
+        }
+      )
+    end
+  end
+  return pins
+end
+
+-- Optional function to update available properties when properties are altered by the user
+function RectifyProperties(props)
+  props["Count"].IsHidden = (props["Type"].Value ~= "Multi-channel")
+  return props
+end
+
+-- Optional function to define components used within the plugin
+function GetComponents(props)
+  local components = {}
+  local multiType = props["Type"].Value
+  local multiTypeIndex = 0
+  
+  if multiType == "Mono" then
+    multiTypeIndex = 1
+  elseif multiType == "Stereo" then
+    multiTypeIndex = 2
+  elseif multiType == "Multi-channel" then
+    multiTypeIndex = 3
+  end
+  
+  table.insert(
+    components,
+    {
+      Name = "GR",
+      Type = "ramp",
+      Properties = {
+        ["multi_channel_type"] = multiTypeIndex,
+        ["multi_channel_count"] = props["Count"].Value
+      }
+    }
+  )
+  return components
+end
+
+-- Optional function to define wiring of components used within the plugin
+function GetWiring(props)
+  local wiring = {}
+  if props["Type"].Value == "Mono" then
+    table.insert(
+      wiring,
+      {
+        "Input",
+        "GR Input"
+      }
+    )
+    table.insert(
+      wiring,
+      {
+        "GR Output",
+        "Output"
+      }
+    )
+  elseif props["Type"].Value == "Stereo" then 
+    table.insert(
+      wiring,
+      {
+        "Input Left",
+        "GR Input Left"
+      }
+    )
+    table.insert(
+      wiring,
+      {
+        "Input Right",
+        "GR Input Right"
+      }
+    )
+    table.insert(
+      wiring,
+      {
+        "GR Output Left",
+        "Output Left"
+      }
+    )
+    table.insert(
+      wiring,
+      {
+        "GR Output Right",
+        "Output Right"
+      }
+    )
+  elseif props["Type"].Value == "Multi-channel" then
+    for x = 1, props["Count"].Value do
+      table.insert(
+        wiring,
+        {
+          "Input Channel " .. x,
+          "GR Input Channel " .. x
+        }
+      )
+      table.insert(
+        wiring,
+        {
+          "GR Output Channel " .. x,
+          "Output Channel " .. x
+        }
+      )
+    end
+  end
+  return wiring
+end
+
+-- Defines the Controls used within the plugin
+function GetControls(props)
+  local ctrls = {}
+  -- table.insert(ctrls,{Name = "code",ControlType = "Text",PinStyle = "Input",Count = 1})
+  
+  table.insert(
+    ctrls,
+    {
+      Name = "mute",
+      ControlType = "Button",
+      ButtonType = "Toggle",
+      UserPin = true,
+      PinStyle = "Both",
+    }
+  )
+  table.insert(
+    ctrls,
+    {
+      Name = "InstantMute",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    }
+  )
+  table.insert(
+    ctrls,
+    {
+      Name = "InstantUnmute",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    }
+  )
+  table.insert(
+    ctrls,
+    {
+      Name = "OnTime",
+      ControlType = "Knob",
+      ControlUnit = "Float",
+      UserPin = true,
+      PinStyle = "Both",
+      DefaultValue = 3,
+      Min = .1,
+      Max = 100,
+    }
+  )
+  table.insert(
+    ctrls,
+    {
+      Name = "OffTime",
+      ControlType = "Knob",
+      ControlUnit = "Float",
+      UserPin = true,
+      PinStyle = "Both",
+      DefaultValue = 3,
+      Min = .1,
+      Max = 100,
+    }
+  )
+  return ctrls
+end
+
+--Layout of controls and graphics for the plugin UI to display
+function GetControlLayout(props)
+  local layout = {}
+  local graphics = {}
+  -- layout["code"] = {PrettyName = "Code",Style = "None"}
+  
+  layout["mute"] = {
+    PrettyName = "Mute",
+    Style = "Button",
+    ButtonType = "Toggle",
+    Size = {80,40},
+    Position = {4,4},
+    Color = {255,0,0},
+    Legend = "Mute",
+  }
+  layout["InstantMute"] = {
+    PrettyName = "Instant Mute",
+    Style = "Button",
+    ButtonType = "Trigger",
+    Size = {80,40},
+    Position = {4,48},
+    Legend = "Instant Mute",
+  }
+  layout["InstantUnmute"] = {
+    PrettyName = "Instant Unmute",
+    Style = "Button",
+    ButtonType = "Trigger",
+    Size = {80,40},
+    Position = {4,92},
+    Legend = "Instant Unmute",
+  }
+  table.insert(
+    graphics,
+    {
+      Type = "Label",
+      Text = "Unmute Time",
+      Size = {80,20},
+      Position = {4,136},
+      VTextAlign = "Bottom",
+    }
+  )
+  layout["OnTime"] = {
+    PrettyName = "On Time",
+    Style = "Text",
+    Size = {80,20},
+    Position = {4,156},
+  }
+  table.insert(
+    graphics,
+    {
+      Type = "Label",
+      Text = "Mute Time",
+      Size = {80,20},
+      Position = {4,180},
+      VTextAlign = "Bottom",
+    }
+  )
+  layout["OffTime"] = {
+    PrettyName = "Off Time",
+    Style = "Text",
+    Size = {80,20},
+    Position = {4,200},
+  }
+  return layout, graphics
+end
+
+--Start event based logic
+if Controls then
+  GR.gain.EventHandler = function(ctrl)
+    GR.mute.Boolean = math.floor(GR.gain.Value) <= -100 and GR["to.b"].Boolean
+  end
+  
+  Controls.mute.EventHandler = function(ctrl)
+    if ctrl.Boolean then
+      GR["to.b"].Boolean = true
+    else
+      GR["to.b"].Boolean = false
+      GR.mute.Boolean = false
+    end
+  end
+  
+  Controls.InstantMute.EventHandler = function()
+    GR["time.b"].Value = .1
+    GR["to.b"].Boolean = true
+    GR.mute.Boolean = true
+    Controls.mute.Boolean = true
+    Timer.CallAfter(
+      function()
+        GR["time.b"].Value = Controls.OffTime.Value
+      end,
+      .1
+    )
+  end
+  
+  Controls.InstantUnmute.EventHandler = function()
+    GR["time.a"].Value = .1
+    GR["to.a"].Boolean = true
+    GR.mute.Boolean = false
+    Controls.mute.Boolean = false
+    Timer.CallAfter(
+      function()
+        GR["time.a"].Value = Controls.OnTime.Value
+      end,
+      .1
+    )
+  end
+  
+  Controls.OnTime.EventHandler = function(ctrl)
+    GR["time.a"].Value = ctrl.Value
+  end
+  
+  Controls.OffTime.EventHandler = function(ctrl)
+    GR["time.b"].Value = ctrl.Value
+  end
+  
+  function Init()
+    print("v"..PluginInfo.BuildVersion)
+    Controls.mute.Boolean = GR["to.b"].Boolean
+    GR["time.a"].Value = Controls.OnTime.Value
+    GR["time.b"].Value = Controls.OffTime.Value
+    GR["release"].Value = .1
+    GR["gain.a"].Value = 0
+    GR["gain.b"].Value = -100
+  end
+  
+  Init()
+end
